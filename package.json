@@ -25,7 +25,7 @@
     "bip39": "^3.0.2",
     "ethereumjs-common": "^1.5.2",
     "ethereumjs-tx": "^2.1.2",
-    "ethereumjs-util": "^5.2.0",
+    "ethereumjs-util": "^5.2.1",
     "ethereumjs-wallet": "^1.0.1",
     "wanchain-util": "^1.2.0",
     "web3": "^1.2.1"
