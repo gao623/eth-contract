@@ -43,30 +43,41 @@ class ContractWrapper {
       throw new Error(`invalid network, can only be in ${networks}`);
     }
 
-    if (!this.cfg.privateKey && (!this.cfg.mnemonic || Number.isNaN(Number(this.cfg.index)))) {
+    if (!this.cfg.privateKeys && !this.cfg.privateKey && (!this.cfg.mnemonic || Number.isNaN(Number(this.cfg.index)))) {
       throw new Error(`Need identify privateKey or (mnemonic and index)`);
     }
 
-    // private key
-    if (!this.cfg.privateKey && this.cfg.mnemonic) {
-      this.privateKey = ContractWrapper.exportPrivateKey(this.cfg.mnemonic, Number(this.cfg.index));
-    } else if (typeof(this.cfg.privateKey) === "string") {
-      if (this.cfg.privateKey.startsWith('0x')) {
-        const pos = this.cfg.privateKey.indexOf('0x');
-        this.cfg.privateKey = this.cfg.privateKey.slice(pos, this.cfg.privateKey.length);
+    if (this.cfg.privateKeys) {
+      if (!Array.isArray(this.cfg.privateKeys)) {
+        throw new Error(`Invalid privateKeys, should be Array`);
       }
-      if ((!this.cfg.privateKey) || this.cfg.privateKey.length != 64){
-        throw new Error("invalid private key");
-      } else {
-        this.privateKey = Buffer.from(this.cfg.privateKey, 'hex');
-      }
+      this.privateKeys = this.cfg.privateKeys.map(privateKey => this.parsePrivateKey(privateKey));
+    } else  if (!this.cfg.privateKey && this.cfg.mnemonic) {
+      this.privateKeys = [ContractWrapper.exportPrivateKey(this.cfg.mnemonic, Number(this.cfg.index))];
     } else {
-      throw new Error("invalid private key");
+      this.privateKeys = [this.parsePrivateKey(this.cfg.privateKey)];
     }
-    this.deployerAddress = this.privateKeyToAddress(this.privateKey);
+    // this.deployerAddress = this.privateKeyToAddress(this.privateKey);
+    this.deployerAddresses = this.privateKeys.map(privateKey => this.privateKeyToAddress(privateKey));
 
     // this.chainType = this.cfg.chainType;
     this.chainType = networkDict[this.cfg.network].chainType;
+  }
+
+  parsePrivateKey(privateKey) {
+    if (Buffer.isBuffer(privateKey)) {
+      return privateKey;
+    }
+    if (typeof(privateKey) === "string") {
+      if (privateKey.startsWith('0x')) {
+        const pos = privateKey.indexOf('0x');
+        privateKey = privateKey.slice(pos, privateKey.length);
+      }
+      if (privateKey && privateKey.length === 64){
+        return Buffer.from(privateKey, 'hex');
+      }
+    }
+    throw new Error("invalid private key");
   }
 
   privateKeyToAddress(privateKey) {
@@ -124,7 +135,7 @@ class ContractWrapper {
   }
 
   async sendTx(contractAddr, data, options) {
-    options = Object.assign({}, {value:0, privateKey: null}, options);
+    options = Object.assign({}, {value:0, privateKey: null, from: this.deployerAddresses[0]}, options);
     // console.log("sendTx, options", options);
 
     if (0 != data.indexOf('0x')){
@@ -133,13 +144,18 @@ class ContractWrapper {
 
     let currPrivateKey;
     let currDeployerAddress;
-    if (options.privateKey && options.privateKey.toLowerCase() !== this.cfg.privateKey.toLowerCase()) {
+    // if (options.privateKey && options.privateKey.toLowerCase() !== this.cfg.privateKey.toLowerCase()) {
+    if (options.privateKey) {
       currPrivateKey = Buffer.from(options.privateKey, 'hex');
       currDeployerAddress = ContractWrapper.getAddressString(options.privateKey);
       // currDeployerAddress = '0x' + ethUtil.privateToAddress(options.privateKey).toString('hex').toLowerCase();
+    } else if (options.from) {
+      let id = this.deployerAddresses.findIndex(address => address.toLowerCase() === options.from.toLowerCase());
+      currPrivateKey = this.privateKeys[id] || this.privateKeys[0];
+      currDeployerAddress = this.deployerAddresses[id] || this.deployerAddresses[0];
     } else {
-      currPrivateKey = this.privateKey;
-      currDeployerAddress = this.deployerAddress;
+      currPrivateKey = this.privateKeys[0];
+      currDeployerAddress = this.deployerAddresses[0];
     }
 
     let value = this.web3.utils.toWei(options.value.toString(), 'ether');
