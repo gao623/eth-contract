@@ -116,11 +116,17 @@ class ContractWrapper {
           }
           return resolve(result);
         };
-
-        if (args.length) {
-          return contract.methods[func](...args).call(cb);
+        let options = {blockNumber:'latest'};
+        let theLastOne = args.length - 1;
+        if (args.length > 0 && !Array.isArray(args[theLastOne]) && typeof(args[theLastOne]) === "object") {
+          let opt = args.pop();
+          options = Object.assign({}, options, opt);
         }
-        return contract.methods[func]().call(cb);
+        console.log("readContract", func, options, args)
+        if (args.length) {
+          return contract.methods[func](...args).call(options.blockNumber, cb);
+        }
+        return contract.methods[func]().call(options.blockNumber, cb);
       } catch (err) {
         return reject(err);
       }
